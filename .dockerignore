@@ -1,0 +1,11 @@
+node_modules/
+dist/
+server/node_modules/
+server/dist/
+data/
+.git/
+*.md
+.DS_Store
+.env
+.env.local
+.env.production

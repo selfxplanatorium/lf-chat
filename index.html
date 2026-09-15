@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- Overwritten at runtime from --color-bg-base so browser chrome tracks the
+         active theme preset (see the theme effect in src/App.tsx). The value
+         here is the dark default, which is what an unstyled first paint shows. -->
+    <meta name="theme-color" content="#101011" />
+    <meta name="description" content="A private, self-hosted space for conversations with your connected language models." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>LF CHAT</title>
+  </head>
+  <body>
+    <!-- Static shell. React replaces the contents of #root on mount, so this is
+         only ever seen by something that does not run JS: crawlers, link preview
+         bots, or a visitor on a failed/slow bundle load. Without it the served
+         HTML carried 7 characters of text and read as a blank page.
+
+         Inline styles on purpose — Tailwind generates classes by scanning the
+         source files, so utility classes used only here are not guaranteed to
+         exist in the built CSS. The colours are the dark default from
+         index.css, matching the theme-color above. -->
+    <div id="root">
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.75rem;padding:2rem;background:#101011;color:#f5f5f5;font-family:system-ui,sans-serif;text-align:center">
+        <h1 style="margin:0;font-size:1.5rem;letter-spacing:-0.01em">LF CHAT</h1>
+        <p style="margin:0;max-width:36rem;line-height:1.6;color:#a1a1a3">
+          A private, self-hosted space for conversations with your connected
+          language models.
+        </p>
+        <noscript style="color:#a1a1a3">
+          This application needs JavaScript enabled to sign in and chat.
+        </noscript>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

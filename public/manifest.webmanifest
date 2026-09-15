@@ -1,0 +1,13 @@
+{
+  "name": "LF CHAT",
+  "short_name": "LF CHAT",
+  "description": "A private, self-hosted space for conversations with your connected language models.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101011",
+  "theme_color": "#101011",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

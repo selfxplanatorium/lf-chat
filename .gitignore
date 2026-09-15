@@ -1,0 +1,12 @@
+node_modules/
+package-lock.json
+build/
+dist/
+coverage/
+data/
+.DS_Store
+*.log
+.env*
+!.env.example
+.claude/
+.impeccable/

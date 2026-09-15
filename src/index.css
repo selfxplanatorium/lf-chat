@@ -1,0 +1,551 @@
+@import "katex/dist/katex.min.css";
+@import "tailwindcss";
+
+/* Self-hosted so the UI has no runtime dependency on Google's servers: no
+   third-party request on first paint, no layout shift waiting on a CDN, and the
+   app keeps its typography offline and in an air-gapped deployment.
+   `font-display: swap` still applies for the brief moment the local file loads.
+
+   Golos Text is variable (400-900), so every weight utility in the UI resolves
+   to a genuine cut. BBH Bartle is single-weight, but it is only ever used for
+   the wordmark at one weight. */
+@font-face {
+  font-family: 'Golos Text';
+  font-style: normal;
+  /* A weight *range*, not a single value: this is a variable font, so the
+     browser interpolates every utility from font-normal to font-black out of
+     one file. Real weights, no synthesis. */
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/golos-text-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Golos Text';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/golos-text-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'BBH Bartle';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/bbh-bartle-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme {
+  --color-bg-base: #101011;
+  --color-bg-surface: #18181A;
+  --color-bg-element: #232326;
+  --color-text-primary: #F4F4F5;
+  --color-text-secondary: #B8B8BE;
+  --color-text-tertiary: #8D8D95;
+  --color-text-muted: #777780;
+  
+  --color-accent: #F43F5E;
+  --color-accent-tech: #818CF8;
+  --color-accent-gold: var(--color-accent);
+  --color-accent-orange: #FB7185;
+  
+  --color-border-light: rgba(255, 255, 255, 0.10);
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #FBBF24;
+
+  --shadow-glow: 0 8px 24px rgba(244, 63, 94, 0.18);
+  --shadow-surface: 0 12px 36px rgba(0, 0, 0, 0.32);
+  --glass-bg: rgba(0, 0, 0, 0.45);
+
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
+  --radius-full: 9999px;
+
+  --font-sans: "Golos Text", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Golos Text", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-raleway: "Golos Text", ui-sans-serif, sans-serif;
+  /* Wordmark only — a display face, never for running text. */
+  --font-wordmark: "BBH Bartle", "Golos Text", ui-sans-serif, sans-serif;
+
+  --animate-fade-in: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-up: slideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-right: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-pop-in: popIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-spin-slow: spinSlow 3s linear infinite;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
+
+/* Base redefinition for Light Mode */
+[data-theme-mode="light"] {
+  --color-bg-base: #F7F7F8;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-element: #EEEEF0;
+  --color-text-primary: #202024;
+  --color-text-secondary: #5A5A62;
+  --color-text-tertiary: #74747D;
+  --color-text-muted: #8A8A93;
+  --color-accent: #A81A40;
+  --color-accent-tech: #344FB3;
+  --color-accent-orange: #D12D55;
+  --color-border-light: rgba(15, 15, 20, 0.10);
+  --color-warning: #D97706;
+  --shadow-glow: none;
+  --shadow-surface: 0 12px 36px rgba(20, 20, 25, 0.09);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+}
+
+/* Light Presets */
+[data-theme-mode="light"][data-theme-preset="cream"] {
+  --color-bg-base: #F9F7F2;
+  --color-bg-surface: #FFFDF9;
+  --color-bg-element: #F0EDE4;
+  --color-text-secondary: #6B5E4F;
+  --color-text-tertiary: #8C7F70;
+  --color-accent: #8B5E3C;
+  --color-accent-tech: #5D7A6D;
+  --color-accent-orange: #A67C52;
+  --shadow-glow: 0 0 10px rgba(139, 94, 60, 0.1);
+}
+
+[data-theme-mode="light"][data-theme-preset="sky"] {
+  --color-bg-base: #F0F4F8;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-element: #E1E9F0;
+  --color-text-secondary: #4A5D6E;
+  --color-text-tertiary: #6B7C8C;
+  --color-accent: #2D5A82;
+  --color-accent-tech: #4A90E2;
+  --color-accent-orange: #3E72A2;
+  --shadow-glow: 0 0 10px rgba(45, 90, 130, 0.1);
+}
+
+/* Dark Presets */
+[data-theme-mode="dark"][data-theme-preset="midnight"] {
+  --color-bg-base: #05070A;
+  --color-bg-surface: #0E1217;
+  --color-bg-element: #161D26;
+  --color-accent: #60A5FA;
+  --color-accent-orange: #93C5FD;
+  --shadow-glow: 0 0 15px rgba(96, 165, 250, 0.25);
+}
+
+[data-theme-mode="dark"][data-theme-preset="forest"] {
+  --color-bg-base: #0A0C0B;
+  --color-bg-surface: #121815;
+  --color-bg-element: #1A241F;
+  --color-accent: #34D399;
+  --color-accent-tech: #4ADE80;
+  --color-accent-orange: #6EE7B7;
+  --shadow-glow: 0 0 15px rgba(52, 211, 153, 0.25);
+}
+
+
+@layer base {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    /* Subpixel rather than `antialiased`: it renders
+       fuller stems, and the UI was reported as too thin. Golos Text is a sturdier
+       grotesque, so switching this back to `antialiased` is a safe one-word
+       change if the text now reads too heavy. */
+    @apply bg-bg-base text-text-primary subpixel-antialiased font-sans;
+    /* No synthesis needed any more: Golos Text carries real 400-900 weights, so
+       font-semibold/font-bold select actual cuts instead of a faked smear. */
+    font-synthesis: none;
+    font-size: 16px;
+    line-height: 24px;
+    letter-spacing: 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  * {
+    transition: border-color 0.2s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 { @apply font-display font-semibold; letter-spacing: -0.025em; }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-bg-element rounded-full border border-bg-base;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-secondary;
+  }
+}
+
+@layer components {
+  .glass-surface {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--color-border-light);
+    /* Use the runtime variable, not the `shadow-surface` utility: Tailwind v4
+       inlines the @theme default into the utility, so @apply would bake in the
+       strong dark shadow (0 8px 32px) and ignore the light-mode override. */
+    box-shadow: var(--shadow-surface);
+  }
+
+  .modal-backdrop {
+    background: rgba(0, 0, 0, 0.28);
+    -webkit-backdrop-filter: blur(14px) saturate(90%);
+    backdrop-filter: blur(14px) saturate(90%);
+  }
+
+  .modal-surface {
+    background: color-mix(in srgb, var(--color-bg-surface) 62%, transparent);
+    -webkit-backdrop-filter: blur(28px) saturate(120%);
+    backdrop-filter: blur(28px) saturate(120%);
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-surface);
+  }
+
+  [data-theme-mode="light"] .modal-backdrop {
+    background: rgba(15, 15, 20, 0.14);
+  }
+
+  [data-theme-mode="light"] .modal-surface {
+    background: color-mix(in srgb, var(--color-bg-surface) 76%, transparent);
+  }
+
+  .assistant-composer-dock::before {
+    content: '';
+    position: absolute;
+    inset: -3rem 0 0;
+    pointer-events: none;
+    background: linear-gradient(to top, color-mix(in srgb, var(--color-bg-base) 88%, transparent) 0%, color-mix(in srgb, var(--color-bg-base) 64%, transparent) 62%, transparent 100%);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    -webkit-mask-image: linear-gradient(to top, black 0%, black 68%, transparent 100%);
+    mask-image: linear-gradient(to top, black 0%, black 68%, transparent 100%);
+  }
+
+  .webhook-menu-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-text-tertiary) 55%, transparent) transparent;
+  }
+
+  .webhook-menu-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .webhook-menu-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .webhook-menu-scroll::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-text-tertiary) 55%, transparent);
+    border: 1px solid transparent;
+    border-radius: var(--radius-full);
+    background-clip: padding-box;
+  }
+
+  .webhook-menu-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-text-secondary) 75%, transparent);
+    background-clip: padding-box;
+  }
+
+  .accent-glow {
+    @apply shadow-glow;
+  }
+
+  /* Markdown Content Styles */
+  .markdown-content {
+    @apply text-text-primary leading-[1.75] text-[15px] break-words;
+    word-break: break-word;
+  }
+  .markdown-content p {
+    @apply mb-4 last:mb-0;
+  }
+  .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 {
+    @apply font-semibold tracking-[-0.02em] text-text-primary mt-8 mb-3 first:mt-0;
+  }
+  .markdown-content h1 { @apply text-2xl; }
+  .markdown-content h2 { @apply text-xl; }
+  .markdown-content h3 { @apply text-lg; }
+  .markdown-content h4 { @apply text-base; }
+
+  .markdown-content a {
+    @apply text-accent font-medium hover:opacity-80 transition-all underline decoration-accent/30 underline-offset-2 hover:decoration-accent;
+  }
+
+  .markdown-content strong {
+    @apply font-bold text-text-primary;
+  }
+
+  .markdown-content em {
+    @apply italic opacity-90;
+  }
+
+  /* Inline Code */
+  .markdown-content :not(pre) > code {
+    @apply font-mono text-[0.85em] text-accent-tech;
+  }
+
+  /* Lists */
+  .markdown-content ul, .markdown-content ol {
+    @apply space-y-3 list-none;
+  }
+  
+  .markdown-content li {
+    @apply leading-relaxed relative pl-7;
+  }
+
+  /* Bullet for UL */
+  .markdown-content ul > li::before {
+    content: '';
+    @apply absolute left-1 top-[11px] w-1.5 h-1.5 rounded-full bg-text-tertiary;
+  }
+
+  /* Number for OL */
+  .markdown-content ol > li {
+    @apply [counter-increment:section];
+  }
+  .markdown-content ol > li::before {
+    content: counter(section) ".";
+    @apply absolute left-0 top-[1px] text-xs font-medium text-text-tertiary;
+  }
+
+  .markdown-content li > p {
+    @apply mb-0;
+  }
+
+  .markdown-content li ul, .markdown-content li ol {
+    @apply my-3 ml-4 border-l border-border-light/20;
+  }
+
+  /* Task Lists */
+  .markdown-content input[type="checkbox"] {
+    @apply appearance-none w-4 h-4 rounded border border-border-light bg-bg-element mr-2 mt-1 relative checked:bg-accent checked:border-accent transition-all cursor-default;
+  }
+  .markdown-content input[type="checkbox"]:checked::after {
+    content: '✓';
+    @apply absolute inset-0 flex items-center justify-center text-[10px] text-white font-bold;
+  }
+
+  /* Tables */
+  .table-block table {
+    @apply w-full border-collapse text-left table-fixed;
+  }
+  .table-block th {
+    @apply border-b border-border-light text-xs font-medium text-text-secondary px-4 py-3;
+    min-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table-block td {
+    @apply border-b border-border-light/40 px-4 py-3;
+    min-width: 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table-block td p {
+    @apply mb-0;
+  }
+  .table-block tr:last-child td {
+    @apply border-b-0;
+  }
+  .table-block.wrap th,
+  .table-block.wrap td {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  /* Blockquotes */
+  .markdown-content blockquote {
+    @apply pl-4 border-l border-border-light italic text-text-secondary py-1;
+  }
+
+  /* Images */
+  .markdown-content img {
+    @apply rounded-2xl border border-border-light my-8 max-w-full h-auto mx-auto;
+    box-shadow: var(--shadow-surface);
+  }
+
+  /* Horizontal Rule */
+  .markdown-content hr {
+    @apply my-10 border-0 border-t border-border-light/20;
+  }
+
+  /* KaTeX Math */
+  .markdown-content .katex-display {
+    @apply my-6 overflow-x-auto overflow-y-hidden py-2;
+  }
+  .markdown-content .katex {
+    @apply text-[1.1em];
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Auth backdrop: drifting red orbs under a film grain.
+
+   Tensions worth recording:
+   - Diffusion vs. cost. The softness comes from radial-gradient colour stops,
+     not a large `filter: blur()`. Blurring elements this size is a per-frame
+     GPU cost on every drift; a gradient is rasterised once. A small blur is
+     still layered on to kill the banding that wide gradients show on 8-bit
+     displays.
+   - Motion vs. battery. Only `transform` is animated, so the orbs stay on the
+     compositor and never trigger layout or paint. Long durations (40-70s) and
+     prime-ish offsets keep the loop from visibly repeating.
+   - The grain is one tiled SVG turbulence, not an image asset and not JS. It is
+     deliberately static: animated grain at this opacity reads as noise on a
+     login screen and costs a repaint every frame.
+
+   The global prefers-reduced-motion rule below freezes the drift, leaving the
+   orbs as a still gradient wash — which is the intended degraded state.
+   --------------------------------------------------------------------------- */
+.auth-orb {
+  position: absolute;
+  border-radius: 9999px;
+  /* Soft all the way to the edge; no hard terminus that would read as a circle. */
+  background: radial-gradient(closest-side,
+    rgba(244, 63, 94, 0.55),
+    rgba(225, 29, 72, 0.28) 42%,
+    rgba(190, 18, 60, 0.10) 68%,
+    rgba(190, 18, 60, 0) 100%);
+  filter: blur(28px);
+  will-change: transform;
+}
+
+[data-theme-mode="light"] .auth-orb {
+  /* The same intensity over a light surface turns into flat pink. */
+  opacity: 0.45;
+}
+
+/* Travel and tempo are tuned to be legible, not ambient-to-the-point-of-static:
+   ~20-30vw of drift over 20-30s reads as movement within a few seconds of
+   landing on the page. Four keyframe stops per orb (rather than two) keep the
+   path wandering instead of sliding back and forth along one axis. Durations
+   stay mutually non-harmonic so the composition does not visibly loop. */
+@keyframes authOrbA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  25%      { transform: translate3d(24vw, -15vh, 0) scale(1.28); }
+  50%      { transform: translate3d(11vw, 20vh, 0) scale(0.82); }
+  75%      { transform: translate3d(-15vw, 7vh, 0) scale(1.12); }
+}
+@keyframes authOrbB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  30%      { transform: translate3d(-22vw, 13vh, 0) scale(0.8); }
+  55%      { transform: translate3d(-8vw, -16vh, 0) scale(1.3); }
+  80%      { transform: translate3d(15vw, 18vh, 0) scale(0.95); }
+}
+@keyframes authOrbC {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(0.92); }
+  35%      { transform: translate3d(-20vw, 19vh, 0) scale(1.32); }
+  70%      { transform: translate3d(14vw, -13vh, 0) scale(0.86); }
+}
+@keyframes authOrbD {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.12); }
+  30%      { transform: translate3d(-17vw, -18vh, 0) scale(0.85); }
+  65%      { transform: translate3d(21vw, 10vh, 0) scale(1.24); }
+}
+
+.auth-orb-a { animation: authOrbA 23s ease-in-out infinite; }
+.auth-orb-b { animation: authOrbB 31s ease-in-out infinite; }
+.auth-orb-c { animation: authOrbC 26s ease-in-out infinite; }
+.auth-orb-d { animation: authOrbD 19s ease-in-out infinite; }
+
+.auth-grain {
+  position: absolute;
+  inset: -100%; /* Overscan so the tile never reveals an edge. */
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  /* `overlay` against a near-black base compresses most of the noise away, so
+     the visible grain comes from a second, normally-blended pass. contrast()
+     hardens the turbulence into distinct specks instead of a soft haze. */
+  opacity: 0.5;
+  filter: contrast(210%) brightness(105%);
+  mix-blend-mode: overlay;
+}
+
+/* Second pass: plain alpha, which actually lifts the shadows and is what makes
+   the grain read as thick on a dark surface. */
+.auth-grain-hard {
+  position: absolute;
+  inset: -100%;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  opacity: 0.16;
+  filter: contrast(180%);
+}
+
+[data-theme-mode="light"] .auth-grain {
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+}
+
+[data-theme-mode="light"] .auth-grain-hard {
+  opacity: 0.1;
+  mix-blend-mode: multiply;
+}
+
+/* Keyboard focus. The app ships a shortcuts modal and full keyboard navigation,
+   but without an explicit ring the browser default is nearly invisible against
+   the darker presets. :focus-visible (not :focus) keeps the ring off mouse
+   clicks, so pointer users never see it.
+
+   In `@layer base` on purpose. Unlayered, this beat every Tailwind utility —
+   including the `outline-none` on the composer textarea, which is why a red
+   outline appeared around the message box whenever it was focused. Layered, any
+   element that styles its own focus (the composer, which shows focus via its
+   container border, and every input using focus:ring-*) wins, while plain
+   controls still get a visible ring. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,23 @@
+name: lfchat
+
+services:
+  lf-chat:
+    build: .
+    container_name: lfchat
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3501:3000"
+    volumes:
+      - lf-chat-data:/app/data
+    env_file: .env
+    environment:
+      - TZ=UTC
+      # Application URL (used in password reset emails and CORS origin allowlist)
+      - APP_URL=${APP_URL:-http://localhost:3501}
+      # All EMAIL_* values come from .env (secrets + non-secrets). Putting any
+      # EMAIL_* key here would silently override .env (compose's `environment:`
+      # block wins over `env_file:` for matching keys), which is exactly the
+      # bug that left email disabled before. Don't add EMAIL_* lines here.
+
+volumes:
+  lf-chat-data:
