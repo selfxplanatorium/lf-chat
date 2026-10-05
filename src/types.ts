@@ -2,12 +2,15 @@ export type ThemeMode = 'light' | 'dark';
 export type ThemePreset = 'default' | 'cream' | 'sky' | 'midnight' | 'forest';
 export type StreamingStatus = 'queued' | 'streaming' | 'completed' | 'failed' | 'interrupted' | 'cancelled' | null;
 
+export type FileAttachment = { id: string; name: string; contentType: string; size: number };
+
 export type Message = {
   id: string;
   role: 'user' | 'assistant' | 'error';
   content: string;
   timestamp: number;
   isStopped?: boolean;
+  attachments?: FileAttachment[];
 };
 
 export type Conversation = {
@@ -22,10 +25,4 @@ export type Conversation = {
   streamingStatus: StreamingStatus;
   streamingMessageId: string | null;
   messageCount?: number;
-};
-
-export type StreamingState = {
-  conversationId: string;
-  messageId: string;
-  buffer: string;
 };

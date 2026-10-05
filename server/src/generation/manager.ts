@@ -1,17 +1,12 @@
+import { getAttachment, metadata, resolveAttachments } from '../lib/attachments';
 import crypto from 'crypto';
 import db from '../db';
 import { log, incrementCounter } from './log';
 import { eventBus } from './eventBus';
 import { writeSnapshot, clearSnapshotState, flushPendingSnapshot } from './snapshot';
-import { runGeneration, RunGenerationParams } from './runner';
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'error';
-  content: string;
-  timestamp: number;
-  isStopped?: boolean;
-}
+import { runGeneration } from './runner';
+import { serializeConversation, type ConversationRow, type Message } from '../lib/conversation';
+export type { Message } from '../lib/conversation';
 
 const GENERATION_TIMEOUT_MS = parseInt(process.env.GENERATION_TIMEOUT_MS || '600000', 10);
 
@@ -22,6 +17,7 @@ interface RunningGeneration {
   idempotencyKey: string;
   abort: AbortController;
   startedAt: number;
+  timeout?: ReturnType<typeof setTimeout>;
 }
 
 class GenerationManager {
@@ -31,7 +27,8 @@ class GenerationManager {
     conversationId: string,
     userId: string,
     userContent: string,
-    idempotencyKey: string
+    idempotencyKey: string,
+    attachmentIds?: string[]
   ): { assistantMessageId: string; userMessageId: string | null; alreadyRunning: boolean } {
     const existing = this.active.get(conversationId);
     if (existing) {
@@ -41,13 +38,13 @@ class GenerationManager {
       throw Object.assign(new Error('Generation in progress'), { statusCode: 409 });
     }
 
-    const settingsRow = db.prepare('SELECT webhooks, active_webhook_id FROM settings WHERE user_id = ?').get(userId) as any;
+    const settingsRow = db.prepare('SELECT webhooks, active_webhook_id FROM settings WHERE user_id = ?').get(userId) as { webhooks: string; active_webhook_id: string } | undefined;
     if (!settingsRow) {
       throw Object.assign(new Error('Settings not found. Please configure a webhook in Settings.'), { statusCode: 400 });
     }
 
     const webhooks: { id: string; name: string; url: string }[] = JSON.parse(settingsRow.webhooks);
-    const activeWebhook = webhooks.find((w: any) => w.id === settingsRow.active_webhook_id);
+    const activeWebhook = webhooks.find((w) => w.id === settingsRow.active_webhook_id);
     if (!activeWebhook) {
       throw Object.assign(new Error('No active webhook configured. Please set one in Settings.'), { statusCode: 400 });
     }
@@ -56,17 +53,21 @@ class GenerationManager {
     const now = Date.now();
     const abort = new AbortController();
 
-    const conv = db.prepare('SELECT messages, title FROM conversations WHERE id = ? AND user_id = ?').get(conversationId, userId) as any;
+    const conv = db.prepare('SELECT messages, title FROM conversations WHERE id = ? AND user_id = ?').get(conversationId, userId) as Pick<ConversationRow, 'messages' | 'title'> | undefined;
     if (!conv) {
       throw Object.assign(new Error('Conversation not found'), { statusCode: 404 });
     }
 
     const messages: Message[] = JSON.parse(conv.messages);
 
+    const attachments = resolveAttachments(attachmentIds, userId);
+    const historyFileIds = new Set(messages.flatMap(message => (message.attachments ?? []).map(file => file.id)));
+    const historyAttachments = [...historyFileIds].map(id => getAttachment(id, userId));
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: userContent,
+      ...(attachments.length ? { attachments: attachments.map(metadata) } : {}),
       timestamp: now,
     };
     messages.push(userMessage);
@@ -98,7 +99,8 @@ class GenerationManager {
         .replace(/^>\s+/gm, '')
         .replace(/^[-*+]\s+/gm, '')
         .replace(/^\d+\.\s+/gm, '');
-      const derived = plain.trim().slice(0, 30) + (plain.trim().length > 30 ? '...' : '');
+      const titleContent = plain.trim() || attachments.map(file => file.name).join(', ');
+      const derived = titleContent.slice(0, 30) + (titleContent.length > 30 ? '...' : '');
       if (derived) newTitle = derived;
     }
 
@@ -143,29 +145,19 @@ class GenerationManager {
       createdAt: now,
     });
 
-    const fullConv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId) as any;
+    const fullConv = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId) as ConversationRow | undefined;
     if (fullConv) {
       eventBus.emit(conversationId, {
         type: 'snapshot',
         conversationId,
-        conversation: {
-          id: fullConv.id,
-          title: fullConv.title,
-          isUntitled: !!fullConv.is_untitled,
-          messages: JSON.parse(fullConv.messages),
-          createdAt: fullConv.created_at,
-          updatedAt: fullConv.updated_at,
-          pinned: !!fullConv.pinned,
-          parentConversationId: fullConv.parent_conversation_id || undefined,
-          streamingStatus: fullConv.streaming_status,
-          streamingMessageId: fullConv.streaming_message_id,
-        },
+        conversation: serializeConversation(fullConv),
       });
     }
 
-    const timeout = setTimeout(() => {
+    running.timeout = setTimeout(() => {
       if (this.active.get(conversationId) === running) {
         abort.abort();
+        this.finish(conversationId, 'failed', assistantMessageId, userId, 'Generation timed out');
       }
     }, GENERATION_TIMEOUT_MS);
 
@@ -176,11 +168,14 @@ class GenerationManager {
       assistantMessageId,
       userMessageContent: userContent,
       history: historyBefore,
+      attachments,
+      historyAttachments,
       webhookUrl: activeWebhook.url,
       abortSignal: abort.signal,
       callbacks: {
         onSnapshot: (fullContent: string) => {
-          const current = db.prepare('SELECT messages FROM conversations WHERE id = ?').get(conversationId) as any;
+          if (this.active.get(conversationId) !== running) return;
+          const current = db.prepare('SELECT messages FROM conversations WHERE id = ?').get(conversationId) as Pick<ConversationRow, 'messages'> | undefined;
           if (!current) return;
           const msgs: Message[] = JSON.parse(current.messages);
           const idx = msgs.findIndex(m => m.id === assistantMessageId);
@@ -197,16 +192,13 @@ class GenerationManager {
           });
         },
         onComplete: () => {
-          clearTimeout(timeout);
           this.finish(conversationId, 'completed', assistantMessageId, userId);
         },
         onError: (error: Error) => {
-          clearTimeout(timeout);
           this.finish(conversationId, 'failed', assistantMessageId, userId, error.message);
         },
       },
     }).catch(() => {
-      clearTimeout(timeout);
       this.finish(conversationId, 'failed', assistantMessageId, userId, 'Internal error');
     });
 
@@ -215,7 +207,7 @@ class GenerationManager {
 
   cancel(conversationId: string, userId: string): boolean {
     const running = this.active.get(conversationId);
-    if (!running) return false;
+    if (!running || running.userId !== userId) return false;
 
     running.abort.abort();
 
@@ -224,7 +216,7 @@ class GenerationManager {
     // the last flushed snapshot.
     flushPendingSnapshot(conversationId);
 
-    const conv = db.prepare('SELECT messages FROM conversations WHERE id = ? AND user_id = ?').get(conversationId, userId) as any;
+    const conv = db.prepare('SELECT messages FROM conversations WHERE id = ? AND user_id = ?').get(conversationId, userId) as Pick<ConversationRow, 'messages' | 'title'> | undefined;
     if (conv) {
       const msgs: Message[] = JSON.parse(conv.messages);
       const idx = msgs.findIndex(m => m.id === running.assistantMessageId);
@@ -239,7 +231,7 @@ class GenerationManager {
     return true;
   }
 
-private finish(
+  private finish(
     conversationId: string,
     status: 'completed' | 'failed' | 'cancelled',
     messageId: string,
@@ -247,12 +239,13 @@ private finish(
     error?: string
   ): void {
     const running = this.active.get(conversationId);
-    if (!running) return;
+    if (!running || running.assistantMessageId !== messageId) return;
 
+    clearTimeout(running.timeout);
     const durationMs = Date.now() - running.startedAt;
 
     if (status === 'failed') {
-      const conv = db.prepare('SELECT messages FROM conversations WHERE id = ?').get(conversationId) as any;
+      const conv = db.prepare('SELECT messages FROM conversations WHERE id = ?').get(conversationId) as Pick<ConversationRow, 'messages'> | undefined;
       if (conv) {
         const msgs: Message[] = JSON.parse(conv.messages);
         const idx = msgs.findIndex(m => m.id === messageId);
@@ -278,16 +271,13 @@ private finish(
         streaming_idempotency_key = NULL,
         updated_at = ?
       WHERE id = ?
-    `).run(status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'failed', Date.now(), conversationId);
+    `).run(status, Date.now(), conversationId);
 
     clearSnapshotState(conversationId);
     this.active.delete(conversationId);
 
-    const eventType = status === 'completed' ? 'completed' :
-      status === 'cancelled' ? 'cancelled' : 'failed';
-
     eventBus.emit(conversationId, {
-      type: eventType,
+      type: status,
       conversationId,
       messageId,
       error,
@@ -302,23 +292,15 @@ private finish(
       error,
     });
 
-    if (status === 'completed') incrementCounter('completed');
-    if (status === 'failed') incrementCounter('failed');
-    if (status === 'cancelled') incrementCounter('cancelled');
+    incrementCounter(status);
   }
 
   isActive(conversationId: string): boolean {
     return this.active.has(conversationId);
   }
 
-  getActive(conversationId: string): { assistantMessageId: string; idempotencyKey: string; startedAt: number } | null {
-    const r = this.active.get(conversationId);
-    if (!r) return null;
-    return { assistantMessageId: r.assistantMessageId, idempotencyKey: r.idempotencyKey, startedAt: r.startedAt };
-  }
-
   getAllActive(): Record<string, { assistantMessageId: string; idempotencyKey: string; startedAt: number; userId: string }> {
-    const result: Record<string, any> = {};
+    const result: ReturnType<GenerationManager['getAllActive']> = {};
     for (const [id, r] of this.active) {
       result[id] = {
         assistantMessageId: r.assistantMessageId,

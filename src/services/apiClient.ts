@@ -1,3 +1,5 @@
+import type { Conversation, Message, FileAttachment } from '../types';
+
 const API_BASE = '/api';
 
 let authToken: string | null = localStorage.getItem('lfchat_token');
@@ -34,14 +36,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string>),
-  };
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
-  }
+export async function apiRequest<T>(path: string, options?: RequestInit, responseType: 'json' | 'blob' = 'json'): Promise<T> {
+  const headers = new Headers(options?.headers);
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const requestToken = authToken;
+  if (requestToken) headers.set('Authorization', `Bearer ${requestToken}`);
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -50,7 +49,7 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    if (response.status === 401) {
+    if (response.status === 401 && authToken === requestToken) {
       setAuthToken(null);
       // Notify the auth layer so it can log the user out and surface the login
       // screen instead of leaving a stale, failing session mounted.
@@ -59,7 +58,7 @@ export async function apiRequest<T>(path: string, options?: RequestInit): Promis
     throw new ApiError(error.error || `Request failed with status ${response.status}`, response.status);
   }
 
-  return response.json();
+  return (responseType === 'blob' ? response.blob() : response.json()) as Promise<T>;
 }
 
 export async function getAllConversations(): Promise<ConversationData[]> {
@@ -69,7 +68,7 @@ export async function getAllConversations(): Promise<ConversationData[]> {
   while (true) {
     const page = await getConversations(limit, offset);
     all.push(...page);
-    if (page.length === 0) break;
+    if (page.length < limit) break;
     offset += limit;
   }
   return all;
@@ -206,19 +205,8 @@ export function updateSettings(data: Partial<UserSettings>): Promise<{ success: 
   });
 }
 
-export interface ConversationData {
-  id: string;
-  title: string;
-  isUntitled: boolean;
-  messages: any[];
-  createdAt: number;
-  updatedAt: number;
-  pinned?: boolean;
-  parentConversationId?: string;
-  streamingStatus?: string | null;
-  streamingMessageId?: string | null;
-  messageCount?: number;
-}
+export type ConversationData = Omit<Conversation, 'streamingStatus' | 'streamingMessageId'> &
+  Partial<Pick<Conversation, 'streamingStatus' | 'streamingMessageId'>>;
 
 export function getConversations(limit?: number, offset?: number): Promise<ConversationData[]> {
   const params = new URLSearchParams();
@@ -228,14 +216,14 @@ export function getConversations(limit?: number, offset?: number): Promise<Conve
   return apiRequest<ConversationData[]>(`/conversations${qs ? `?${qs}` : ''}`);
 }
 
-export function createConversation(data: { id?: string; title?: string; isUntitled?: boolean; messages?: any[] }): Promise<ConversationData> {
+export function createConversation(data: { id?: string; title?: string; isUntitled?: boolean; messages?: Message[] }): Promise<ConversationData> {
   return apiRequest<ConversationData>('/conversations', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function updateConversation(id: string, data: { title?: string; isUntitled?: boolean; messages?: any[]; pinned?: boolean }): Promise<{ success: boolean }> {
+export function updateConversation(id: string, data: { title?: string; isUntitled?: boolean; messages?: Message[]; pinned?: boolean }): Promise<{ success: boolean }> {
   return apiRequest(`/conversations/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -254,10 +242,10 @@ export interface SendMessageResponse {
   alreadyRunning: boolean;
 }
 
-export function sendMessage(conversationId: string, content: string, idempotencyKey: string): Promise<SendMessageResponse> {
+export function sendMessage(conversationId: string, content: string, idempotencyKey: string, attachmentIds?: string[]): Promise<SendMessageResponse> {
   return apiRequest<SendMessageResponse>(`/conversations/${conversationId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, idempotencyKey }),
+    body: JSON.stringify({ content, idempotencyKey, attachmentIds }),
   });
 }
 
@@ -288,6 +276,32 @@ export function branchConversation(conversationId: string, messageId: string, co
   });
 }
 
-export function getConversationMessages(conversationId: string, limit: number, offset: number): Promise<{ messages: any[]; total: number }> {
+export function getConversationMessages(conversationId: string, limit: number, offset: number): Promise<{ messages: Message[]; total: number }> {
   return apiRequest(`/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`);
+}
+
+export async function getAllConversationMessages(conversationId: string): Promise<Message[]> {
+  const messages: Message[] = [];
+  const limit = 1000;
+  while (true) {
+    const page = await getConversationMessages(conversationId, limit, messages.length);
+    messages.push(...page.messages);
+    if (messages.length >= page.total) return messages;
+    if (page.messages.length === 0) throw new Error('Conversation history changed while loading');
+  }
+}
+
+export function uploadAttachment(file: File, id = crypto.randomUUID(), signal?: AbortSignal): Promise<FileAttachment> {
+  return apiRequest('/attachments', { method: 'POST', body: file, signal, headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name), 'X-File-Id': id } });
+}
+export function removeAttachment(id: string): Promise<{ success: boolean }> {
+  return apiRequest(`/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+export function getAttachmentBlob(id: string): Promise<Blob> {
+  return apiRequest(`/attachments/${encodeURIComponent(id)}`, undefined, 'blob');
+}
+export async function downloadAttachment(file: FileAttachment): Promise<void> {
+  const url = URL.createObjectURL(await getAttachmentBlob(file.id));
+  const link = document.createElement('a'); link.href = url; link.download = file.name; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

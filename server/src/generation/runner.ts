@@ -1,5 +1,8 @@
-import { Message } from './manager';
+import type { StoredAttachment } from '../lib/attachments';
+import type { Message } from '../lib/conversation';
 import { validateWebhookUrl } from '../lib/urlGuard';
+import { prepareWebhookFile } from '../lib/webhookFile';
+import { ResponseParser } from './responseParser';
 
 export interface RunnerCallbacks {
   onSnapshot: (fullContent: string) => void;
@@ -12,44 +15,40 @@ export interface RunGenerationParams {
   assistantMessageId: string;
   userMessageContent: string;
   history: Message[];
+  attachments?: StoredAttachment[];
+  historyAttachments?: StoredAttachment[];
   webhookUrl: string;
   abortSignal: AbortSignal;
   callbacks: RunnerCallbacks;
 }
 
 const STREAM_STALL_TIMEOUT_MS = parseInt(process.env.STREAM_STALL_TIMEOUT_MS || '60000', 10);
-// Cap the accumulated response so a runaway (or malicious) webhook can't grow
-// the in-memory buffer without bound and OOM the server.
 const MAX_RESPONSE_CHARS = parseInt(process.env.MAX_RESPONSE_CHARS || '5000000', 10);
 
-function readWithTimeout(
+async function readWithTimeout(
   reader: ReadableStreamDefaultReader<Uint8Array>,
-  timeoutMs: number
 ): Promise<{ done: boolean; value?: Uint8Array }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Stream stalled: no data received for ${timeoutMs}ms`));
-    }, timeoutMs);
-
-    reader.read().then(
-      (result) => {
-        clearTimeout(timer);
-        resolve(result);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      }
-    );
-  });
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Stream stalled: no data received for ${STREAM_STALL_TIMEOUT_MS}ms`)), STREAM_STALL_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer!);
+  }
 }
 
 export async function runGeneration(params: RunGenerationParams): Promise<void> {
-  const { conversationId, history, webhookUrl, abortSignal, callbacks, userMessageContent } = params;
-
+  const { history, webhookUrl, abortSignal, callbacks, userMessageContent } = params;
+  const attachments = params.attachments ?? [];
+  const historyFiles = params.historyAttachments ?? [];
+  const fileText = (files: StoredAttachment[]) => files.map(file => `\n[Attachment: ${JSON.stringify(file.name)}]\n${file.text || "Image supplied separately."}`).join("\n");
   const historyStr = history
     .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}${fileText(historyFiles.filter(file => m.attachments?.some(a => a.id === file.id)))}`)
     .join('\n');
 
   if (!webhookUrl) {
@@ -57,176 +56,65 @@ export async function runGeneration(params: RunGenerationParams): Promise<void> 
     return;
   }
 
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
-    // SSRF guard: reject non-http(s) schemes and hosts that resolve to private/
-    // loopback/link-local addresses before the server makes the request.
     await validateWebhookUrl(webhookUrl);
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream, text/plain',
-      },
-      body: JSON.stringify({ message: userMessageContent, history: historyStr, stream: true }),
-      signal: abortSignal,
-    });
+    const message = userMessageContent + fileText(attachments);
+    const files = [...new Map([...historyFiles.filter(file => file.contentType.startsWith('image/')), ...attachments].map(file => [file.id, file])).values()];
+    let body: string | FormData = JSON.stringify({ message, history: historyStr, stream: true });
+    const headers: Record<string, string> = { 'Accept': 'text/event-stream, text/plain' };
+    if (files.length) {
+      const form = new FormData();
+      form.set('message', message || 'Please analyze the attached files.');
+      form.set('history', historyStr);
+      form.set('stream', 'true');
+      if (files.reduce((sum, file) => sum + file.size, 0) > 10 * 1024 * 1024) throw new Error('File context exceeds 10 MB; start a new chat with the files you need');
+      for (const [index, original] of files.entries()) {
+        const file = await prepareWebhookFile(original);
+        if (abortSignal.aborted) return;
+        form.append(`file${index}`, new Blob([new Uint8Array(file.data)], { type: file.contentType }), file.name);
+      }
+      body = form;
+    } else headers['Content-Type'] = 'application/json';
+    const response = await fetch(webhookUrl, { method: 'POST', headers, body, signal: abortSignal });
 
     if (!response.ok) {
-      let errorMessage = `Webhook responded with status: ${response.status}`;
-      try {
-        const errorData = await response.json() as Record<string, string>;
-        errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch {
-        // ignore JSON parsing errors for error response
-      }
-      throw new Error(errorMessage);
+      const data = await response.json().catch(() => ({})) as { error?: string; message?: string };
+      throw new Error(data.error || data.message || `Webhook responded with status: ${response.status}`);
     }
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('Response body is null');
-    }
+    reader = response.body?.getReader();
+    if (!reader) throw new Error('Response body is null');
 
     const decoder = new TextDecoder();
-    const contentType = response.headers.get('content-type') || '';
-    const isSSE = contentType.includes('text/event-stream');
-    let fullContent = '';
-    let buffer = '';
+    const parser = new ResponseParser(response.headers.get('content-type') || '', MAX_RESPONSE_CHARS);
     let lastUpdateTime = Date.now();
 
-    const dispatchToken = (_token: string, content: string, force = false) => {
+    while (!abortSignal.aborted) {
+      const { done, value } = await readWithTimeout(reader);
+      if (done || abortSignal.aborted) break;
+      const content = parser.push(decoder.decode(value, { stream: true }));
       const now = Date.now();
-      if (force || now - lastUpdateTime > 50) {
+      if (now - lastUpdateTime > 50) {
         callbacks.onSnapshot(content);
         lastUpdateTime = now;
       }
-    };
-
-    while (true) {
-      if (abortSignal.aborted) {
-        break;
-      }
-
-      let result: { done: boolean; value?: Uint8Array };
-      try {
-        result = await readWithTimeout(reader, STREAM_STALL_TIMEOUT_MS);
-      } catch (err: any) {
-        callbacks.onError(err instanceof Error ? err : new Error(String(err)));
-        return;
-      }
-
-      const { done, value } = result;
-      if (done) break;
-      if (abortSignal.aborted) {
-        await reader.cancel();
-        break;
-      }
-
-      const chunk = decoder.decode(value!, { stream: true });
-      buffer += chunk;
-
-      if (isSSE) {
-        let lineEndIndex;
-        while ((lineEndIndex = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, lineEndIndex).trim();
-          buffer = buffer.slice(lineEndIndex + 1);
-
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              let token = parsed.output || parsed.text || parsed.content || parsed.token || (parsed.choices?.[0]?.delta?.content);
-              if (token && typeof token === 'object') {
-                token = token.text || token.content || token.output || null;
-              }
-
-              if (typeof token === 'string' && token) {
-                fullContent += token;
-                dispatchToken(token, fullContent);
-              }
-            } catch {
-              const trimmedData = data.trim();
-              if (trimmedData && !trimmedData.startsWith('{') && !trimmedData.startsWith('[') && trimmedData !== '[DONE]') {
-                fullContent += data;
-                dispatchToken(data, fullContent);
-              }
-            }
-          }
-        }
-      } else {
-        let lineBreakIndex;
-        while ((lineBreakIndex = buffer.indexOf('\n')) >= 0) {
-          const line = buffer.slice(0, lineBreakIndex).trim();
-          buffer = buffer.slice(lineBreakIndex + 1);
-
-          if (!line) continue;
-
-          try {
-            const json = JSON.parse(line);
-            let token = json.output || json.text || json.content || json.token || (json.choices?.[0]?.delta?.content);
-
-            if (token && typeof token === 'object') {
-              token = token.text || token.content || token.output || null;
-            }
-
-            if (typeof token === 'string' && token) {
-              fullContent += token;
-              dispatchToken(token, fullContent);
-            }
-          } catch {
-            fullContent += line + '\n';
-            dispatchToken(line + '\n', fullContent);
-          }
-        }
-      }
-
-      if (fullContent.length > MAX_RESPONSE_CHARS) {
-        try { await reader.cancel(); } catch {}
-        callbacks.onError(new Error('Response from webhook exceeded the maximum allowed size.'));
-        return;
-      }
     }
 
-    if (buffer.trim() && !isSSE) {
-      try {
-        const json = JSON.parse(buffer.trim());
-        const token = json.output || json.text || json.content || json.token;
-        if (typeof token === 'string' && token) {
-          fullContent += token;
-          dispatchToken(token, fullContent, true);
-        }
-      } catch {
-        const finalTrimmedData = buffer.trim();
-        if (finalTrimmedData && !finalTrimmedData.startsWith('{')) {
-          fullContent += finalTrimmedData;
-          dispatchToken(finalTrimmedData, fullContent, true);
-        }
-      }
-    }
-
-    if (abortSignal.aborted) {
-      return;
-    }
-
-    dispatchToken('', fullContent, true);
+    if (abortSignal.aborted) return;
+    parser.push(decoder.decode());
+    callbacks.onSnapshot(parser.finish());
     callbacks.onComplete();
-  } catch (error: any) {
-    if (error.name === 'AbortError') {
-      return;
+  } catch (error: unknown) {
+    if (!abortSignal.aborted) {
+      callbacks.onError(error instanceof Error ? error : new Error(String(error)));
     }
-
-    let errorObj = error instanceof Error ? error : new Error(String(error));
-
-    if (errorObj.message.includes('error in input stream') || errorObj.message.includes('network error')) {
-      errorObj = new Error(
-        errorObj.message +
-        '\n\n(System Note: "error in input stream" indicates that the network connection was closed abruptly. Since this only happens with slower models like Claude Opus, it is highly likely that your reverse proxy (e.g. Cloudflare, Nginx, Ngrok) or N8N deployment has a timeout that is dropping the connection while waiting for the first token. Please check and increase your proxy/server timeout settings.)'
-      );
+  } finally {
+    // Also release stalled/oversized responses and aborted mocked transports.
+    // Waiting for cancellation can itself hang on a broken upstream.
+    if (reader) {
+      void reader.cancel().catch(() => {});
+      reader.releaseLock();
     }
-
-    callbacks.onError(errorObj);
   }
 }

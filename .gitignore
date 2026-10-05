@@ -1,5 +1,4 @@
 node_modules/
-package-lock.json
 build/
 dist/
 coverage/
@@ -10,3 +9,9 @@ data/
 !.env.example
 .claude/
 .impeccable/
+
+.n8n_env
+
+.wp_env
+
+.baserow_jwt

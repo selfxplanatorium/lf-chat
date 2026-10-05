@@ -8,6 +8,7 @@ import db from './db';
 import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import conversationsRoutes from './routes/conversations';
+import attachmentsRoutes from './routes/attachments';
 import debugRoutes from './routes/_debug';
 import { log, incrementCounter } from './generation/log';
 
@@ -53,6 +54,7 @@ if (interruptedCount.changes > 0) {
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/attachments', attachmentsRoutes);
 
 if (process.env.DEBUG_INTROSPECTION === '1') {
   app.use('/api/_debug', debugRoutes);

@@ -8,7 +8,7 @@ import {
   type AppendMessage,
   type ThreadMessageLike,
 } from '@assistant-ui/react';
-import { ArrowDown, ArrowUp, Check, ChevronDown, LoaderCircle, Plus, Square } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, LoaderCircle, Maximize2, Minimize2, Plus, Square } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Conversation, Message } from '../types';
 import type { WebhookEntry } from '../hooks/useSettings';
@@ -17,11 +17,14 @@ import { cn } from '../lib/utils';
 import { MessageItem } from './MessageItem';
 import { MessageListSkeleton } from './Skeletons';
 import { useI18n } from '../i18n';
+import { ExpandableComposer } from './ExpandableComposer';
+import { ComposerFiles, AttachFileButton, useFileDrop } from './ComposerFiles';
+import { createAttachmentAdapter, attachmentErrorKey } from '../lib/attachmentAdapter';
 
 interface AssistantThreadProps {
   conversation: Conversation | null;
   isStreaming: boolean;
-  onSend: (message: string) => Promise<boolean | void> | boolean | void;
+  onSend: (message: string, attachmentIds?: string[]) => Promise<boolean | void> | boolean | void;
   onStop: () => void;
   onEditMessage: (messageId: string, content: string) => void;
   onBranchMessage?: (messageId: string) => void;
@@ -44,6 +47,7 @@ const convertMessage = (message: Message): ThreadMessageLike => ({
   role: message.role === 'user' ? 'user' : 'assistant',
   content: [{ type: 'text', text: message.content }],
   createdAt: new Date(message.timestamp),
+  attachments: message.attachments?.map(file => ({ ...file, type: file.contentType.startsWith('image/') ? 'image' as const : 'document' as const, status: { type: 'complete' as const }, content: [] })),
 });
 
 interface ThreadComposerProps {
@@ -266,50 +270,71 @@ const ThreadComposer: React.FC<ThreadComposerProps> = ({
 }) => {
   const { t } = useI18n();
 
+  const fileDrop = useFileDrop();
+
   return (
-    <div className="relative flex w-full flex-col items-center">
-      <ComposerPrimitive.Root className="assistant-composer glass-surface w-full rounded-2xl p-2 transition-[border-color,box-shadow] focus-within:border-text-muted/60">
-        <ComposerPrimitive.Input
-          id="chat-input"
-          rows={1}
-          submitMode={sendWithCtrlEnter ? ('ctrlEnter' as const) : ('enter' as const)}
-          placeholder={isStreaming ? t('chat.thread.addToConversation') : t('chat.thread.messagePlaceholder')}
-          aria-label={t('chat.thread.messageInput')}
-          className="max-h-48 min-h-14 w-full resize-none bg-transparent px-3 py-3 text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-tertiary"
-        />
-        <div className="flex items-center justify-between gap-3 px-2 pb-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <WebhookMenu
-              activeWebhook={activeWebhook}
-              activeWebhookId={activeWebhookId}
-              disabled={isStreaming}
-              onChange={onActiveWebhookChange}
-              onCreate={onCreateWebhook}
-              webhooks={webhooks}
+    <ExpandableComposer>
+      {({ expanded, toggle }) => (
+        <>
+          <ComposerPrimitive.Root {...fileDrop} className="assistant-composer glass-surface relative w-full rounded-2xl p-2 transition-[border-color,box-shadow] focus-within:border-text-muted/60">
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={expanded}
+              aria-controls="chat-input"
+              aria-label={t(expanded ? 'chat.thread.collapseComposer' : 'chat.thread.expandComposer')}
+              title={t(expanded ? 'chat.thread.collapseComposer' : 'chat.thread.expandComposer')}
+              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-xl text-text-secondary transition-colors hover:bg-bg-element hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {expanded ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+            </button>
+            <ComposerFiles />
+            <ComposerPrimitive.Input
+              addAttachmentOnPaste={false}
+              id="chat-input"
+              rows={1}
+              submitMode={sendWithCtrlEnter ? ('ctrlEnter' as const) : ('enter' as const)}
+              placeholder={isStreaming ? t('chat.thread.addToConversation') : t('chat.thread.messagePlaceholder')}
+              aria-label={t('chat.thread.messageInput')}
+              cancelOnEscape={!expanded}
+              className="assistant-composer-input max-h-48 min-h-14 w-full resize-none bg-transparent px-3 py-3 pr-14 text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-tertiary"
             />
-            <span className="hidden text-xs text-text-tertiary md:inline" aria-live="polite">
-              {activeWebhook?.url ? t('chat.thread.usedForNext') : t('chat.thread.configureBackend')}
-            </span>
+            <div className="flex items-center justify-between gap-3 px-2 pb-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <AttachFileButton />
+                <WebhookMenu
+                  activeWebhook={activeWebhook}
+                  activeWebhookId={activeWebhookId}
+                  disabled={isStreaming}
+                  onChange={onActiveWebhookChange}
+                  onCreate={onCreateWebhook}
+                  webhooks={webhooks}
+                />
+                <span className="hidden text-xs text-text-tertiary md:inline" aria-live="polite">
+                  {activeWebhook?.url ? t('chat.thread.usedForNext') : t('chat.thread.configureBackend')}
+                </span>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <AuiIf condition={(state) => !state.thread.isRunning}>
+                  <ComposerPrimitive.Send className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white transition-[filter,transform] hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-bg-element disabled:text-text-muted" aria-label={t('chat.thread.sendMessage')}>
+                    <ArrowUp size={17} strokeWidth={2.5} />
+                  </ComposerPrimitive.Send>
+                </AuiIf>
+                <AuiIf condition={(state) => state.thread.isRunning}>
+                  <ComposerPrimitive.Cancel className="flex h-9 w-9 items-center justify-center rounded-xl bg-text-primary text-bg-base transition-transform hover:scale-[1.03] active:scale-95" aria-label={t('chat.thread.stopResponse')}>
+                    <Square size={13} fill="currentColor" />
+                  </ComposerPrimitive.Cancel>
+                </AuiIf>
+              </div>
+            </div>
+          </ComposerPrimitive.Root>
+          <div className="mt-2 flex w-full items-center justify-between gap-3 px-1 text-xs text-text-tertiary">
+            <span className="hidden sm:inline">{sendWithCtrlEnter ? t('chat.thread.ctrlEnterToSend') : t('chat.thread.enterToSend')}</span>
+            <span className="ml-auto">{t('chat.thread.verifyDetails')}</span>
           </div>
-          <div className="ml-auto">
-            <AuiIf condition={(state) => !state.thread.isRunning}>
-              <ComposerPrimitive.Send className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-white transition-[filter,transform] hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-bg-element disabled:text-text-muted" aria-label={t('chat.thread.sendMessage')}>
-                <ArrowUp size={17} strokeWidth={2.5} />
-              </ComposerPrimitive.Send>
-            </AuiIf>
-            <AuiIf condition={(state) => state.thread.isRunning}>
-              <ComposerPrimitive.Cancel className="flex h-9 w-9 items-center justify-center rounded-xl bg-text-primary text-bg-base transition-transform hover:scale-[1.03] active:scale-95" aria-label={t('chat.thread.stopResponse')}>
-                <Square size={13} fill="currentColor" />
-              </ComposerPrimitive.Cancel>
-            </AuiIf>
-          </div>
-        </div>
-      </ComposerPrimitive.Root>
-      <div className="mt-2 flex w-full items-center justify-between gap-3 px-1 text-xs text-text-tertiary">
-        <span className="hidden sm:inline">{sendWithCtrlEnter ? t('chat.thread.ctrlEnterToSend') : t('chat.thread.enterToSend')}</span>
-        <span className="ml-auto">{t('chat.thread.verifyDetails')}</span>
-      </div>
-    </div>
+        </>
+      )}
+    </ExpandableComposer>
   );
 };
 
@@ -329,8 +354,9 @@ export const AssistantThread: React.FC<AssistantThreadProps> = (props) => {
       .join('\n')
       .trim();
 
-    if (!text) return;
-    const result = await onSend(text);
+    const attachmentIds = message.attachments?.map(file => file.id) ?? [];
+    if (!text && !attachmentIds.length) return;
+    const result = await onSend(text, attachmentIds);
     if (result === false) throw new Error(t('chat.thread.sendError'));
 
     // Composer text is session-scoped. Once the message is accepted, remove
@@ -342,14 +368,26 @@ export const AssistantThread: React.FC<AssistantThreadProps> = (props) => {
     }
   }, [conversation?.id, onSend, t]);
 
+  const [attachmentsBlocked, setAttachmentsBlocked] = React.useState(false);
+  const translateAttachmentError = React.useRef(t);
+  translateAttachmentError.current = t;
+  // Keep uploaded drafts available when the interface language changes.
+  const attachmentAdapter = React.useMemo(() => createAttachmentAdapter(message => translateAttachmentError.current(attachmentErrorKey(message))), []);
   const runtime = useExternalStoreRuntime<Message>({
+    adapters: { attachments: attachmentAdapter },
     messages: conversation?.messages ?? [],
     isRunning: isStreaming,
     convertMessage,
-    isSendDisabled: !(props.webhooks?.find((webhook) => webhook.id === props.activeWebhookId)?.url),
+    isSendDisabled: attachmentsBlocked || !(props.webhooks?.find((webhook) => webhook.id === props.activeWebhookId)?.url),
     onNew: handleNew,
     onCancel: async () => onStop(),
   });
+
+  React.useEffect(() => {
+    const composer = runtime.thread.composer;
+    const update = () => setAttachmentsBlocked(composer.getState().attachments.some(file => file.status.type === 'running' || file.status.type === 'incomplete'));
+    update(); return composer.subscribe(update);
+  }, [runtime]);
 
   React.useEffect(() => {
     const draftKey = conversation?.id ? `chat-draft-${conversation.id}` : null;
@@ -361,6 +399,7 @@ export const AssistantThread: React.FC<AssistantThreadProps> = (props) => {
       sessionStorage.setItem(draftKey, savedDraft);
       localStorage.removeItem(draftKey);
     }
+    void composer.clearAttachments();
     composer.setText(savedDraft);
 
     return composer.subscribe(() => {
@@ -445,6 +484,7 @@ const ThreadSurface: React.FC<AssistantThreadProps> = ({
   isLoadingMessages = false,
 }) => {
   const { t } = useI18n();
+  const threadDrop = useFileDrop();
   const [composerDockHeight, setComposerDockHeight] = React.useState(0);
   const composerDockObserverRef = React.useRef<ResizeObserver | null>(null);
   const isLoadingConversation = !!conversation
@@ -463,7 +503,7 @@ const ThreadSurface: React.FC<AssistantThreadProps> = ({
   }, []);
 
   return (
-    <ThreadPrimitive.Root className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <ThreadPrimitive.Root {...threadDrop} className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <ThreadPrimitive.Viewport
         className="assistant-thread-viewport flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]"
         autoScroll

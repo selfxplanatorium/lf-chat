@@ -1,0 +1,1 @@
+The small PDF, modern Office, spreadsheet, RTF, text, and PNG fixtures were generated for these tests. `legacy.doc` is the MIT-licensed `test01.doc` fixture from https://github.com/morungos/node-word-extractor (Copyright Stuart Watt, 2016–2021). See that project's LICENSE for the full MIT license.

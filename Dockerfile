@@ -15,6 +15,7 @@ FROM node:22-alpine AS server-builder
 WORKDIR /app/server
 
 COPY server/package.json server/package-lock.json ./
+COPY server/vendor/ ./vendor/
 RUN npm ci
 
 COPY server/ .

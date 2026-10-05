@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import type { ConversationData } from '../lib/conversation';
 
 export type GenerationEventType =
   | 'started'
@@ -15,7 +15,8 @@ export interface GenerationEvent {
   content?: string;
   createdAt?: number;
   error?: string;
-  conversation?: any;
+  conversation?: ConversationData;
+  messageCount?: number;
 }
 
 type Subscriber = (event: GenerationEvent) => void;
@@ -53,10 +54,6 @@ class EventBus {
     }
   }
 
-  subscriberCount(conversationId: string): number {
-    return this.subscribers.get(conversationId)?.size ?? 0;
-  }
-
   getAllSubscriberCounts(): Record<string, number> {
     const result: Record<string, number> = {};
     for (const [id, set] of this.subscribers) {
@@ -65,9 +62,7 @@ class EventBus {
     return result;
   }
 
-  activeConversationIds(): string[] {
-    return Array.from(this.subscribers.keys());
-  }
+
 }
 
 export const eventBus = new EventBus();

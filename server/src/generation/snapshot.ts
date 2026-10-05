@@ -23,32 +23,12 @@ function flushConversation(conversationId: string): void {
     db.prepare('UPDATE conversations SET messages = ?, updated_at = ? WHERE id = ?')
       .run(messages, Date.now(), conversationId);
     log({ event: 'snapshot', conversationId, contentLength: messages.length });
-  } catch (err: any) {
-    log({ event: 'snapshot', conversationId, error: err?.message || String(err) });
+  } catch (err: unknown) {
+    log({ event: 'snapshot', conversationId, error: err instanceof Error ? err.message : String(err) });
   }
 }
 
 export function writeSnapshot(conversationId: string, messagesJson: string, force = false): void {
-  if (force) {
-    // Ensure a state exists before flushing. A forced write can happen with no
-    // prior throttle state — e.g. a generation that fails or is cancelled before
-    // streaming any token (onSnapshot never ran). Without this, flushConversation
-    // finds no state and silently drops the write, so the message's error/stopped
-    // role never reaches the DB and disappears on the next snapshot/switch-back.
-    let state = snapshots.get(conversationId);
-    if (!state) {
-      state = { lastFlushTime: 0, timer: null, pendingMessages: null };
-      snapshots.set(conversationId, state);
-    }
-    if (state.timer) {
-      clearTimeout(state.timer);
-      state.timer = null;
-    }
-    state.pendingMessages = messagesJson;
-    flushConversation(conversationId);
-    return;
-  }
-
   let state = snapshots.get(conversationId);
   if (!state) {
     state = { lastFlushTime: 0, timer: null, pendingMessages: null };
@@ -58,8 +38,8 @@ export function writeSnapshot(conversationId: string, messagesJson: string, forc
   state.pendingMessages = messagesJson;
   const elapsed = Date.now() - state.lastFlushTime;
 
-  if (elapsed >= SNAPSHOT_INTERVAL_MS) {
-    flushConversation(conversationId);
+  if (force || elapsed >= SNAPSHOT_INTERVAL_MS) {
+    flushPendingSnapshot(conversationId);
   } else if (!state.timer) {
     state.timer = setTimeout(() => {
       state!.timer = null;
@@ -100,7 +80,7 @@ export function getSnapshotState(conversationId: string): { pendingMessagesLengt
 }
 
 export function getAllSnapshotStates(): Record<string, { pendingMessagesLength: number; lastFlushTime: number }> {
-  const result: Record<string, any> = {};
+  const result: ReturnType<typeof getAllSnapshotStates> = {};
   for (const [id, state] of snapshots) {
     result[id] = {
       pendingMessagesLength: state.pendingMessages?.length ?? 0,

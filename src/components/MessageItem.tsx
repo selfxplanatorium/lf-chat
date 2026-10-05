@@ -4,6 +4,7 @@ import { cn } from '../lib/utils';
 import { AlertCircle, Copy, Check, Pencil, X, GitBranch, RotateCcw, Square, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '../i18n';
+import { MessageFiles } from './ComposerFiles';
 
 // react-markdown + katex + the Prism grammars are ~900 kB and nothing on the
 // first screen needs them, so they live in their own chunk. Warmed on idle
@@ -309,6 +310,7 @@ const MessageItemBody: React.FC<MessageItemProps> = ({
                   <span>{t('chat.message.responseError')}</span>
                 </div>
               )}
+              <MessageFiles files={message.attachments ?? []} />
               <div className={cn(
                 "markdown-content",
                 isError && "text-danger"

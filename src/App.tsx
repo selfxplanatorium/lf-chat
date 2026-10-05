@@ -70,7 +70,7 @@ export default function App() {
     branchConversation,
     retryMessage,
     stopResponse,
-    activeStreamingState,
+    isStreaming,
     isCurrentEmpty,
     isLoaded: conversationsLoaded,
     hasMore,
@@ -120,11 +120,11 @@ export default function App() {
   // switching back repeatedly to check is the thing worth removing.
   useEffect(() => {
     const title = activeConversation?.isUntitled ? '' : activeConversation?.title?.trim();
-    const streaming = !!activeStreamingState;
+    const streaming = isStreaming;
     document.title = title
       ? `${streaming ? '● ' : ''}${title} — LF CHAT`
       : `${streaming ? '● ' : ''}LF CHAT`;
-  }, [activeConversation?.title, activeConversation?.isUntitled, activeStreamingState]);
+  }, [activeConversation?.title, activeConversation?.isUntitled, isStreaming]);
 
   // Warm the lazy chunks (settings + JSZip; markdown + katex + Prism) on idle so
   // their first use is instant too. They are split off the critical path for
@@ -499,8 +499,8 @@ export default function App() {
         ) : (
           <AssistantThread
             conversation={activeConversation}
-            isStreaming={!!activeStreamingState}
-            onSend={(text) => sendMessage(text)}
+            isStreaming={isStreaming}
+            onSend={(text, attachmentIds) => sendMessage(text, attachmentIds)}
             onStop={() => stopResponse()}
             onEditMessage={(msgId, content) => editMessage(activeConversationId!, msgId, content)}
             onBranchMessage={(msgId) => branchConversation(activeConversationId!, msgId)}

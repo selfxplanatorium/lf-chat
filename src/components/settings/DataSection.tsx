@@ -4,7 +4,8 @@ import { AlertTriangle, Check, Download, Loader2, Upload } from 'lucide-react';
 import JSZip from 'jszip';
 import { Conversation } from '../../types';
 import { Settings } from '../../hooks/useSettings';
-import { ApiError } from '../../services/apiClient';
+import { importConversations } from '../../lib/importConversations';
+import { addBackupAttachments, restoreBackupAttachments } from '../../lib/attachmentBackup';
 import * as api from '../../services/apiClient';
 import { useToast } from '../Toast';
 import { cn } from '../../lib/utils';
@@ -19,20 +20,6 @@ import {
   QUICK,
   SectionHeading,
 } from './primitives';
-
-const LEGACY_UNTITLED_TITLES = new Set([
-  'new conversation',
-  'new chat',
-  'neuer chat',
-  'nuova chat',
-  'nuova conversazione',
-]);
-
-function isUntitledBackup(conversation: any): boolean {
-  if (typeof conversation.isUntitled === 'boolean') return conversation.isUntitled;
-  return (conversation.messages?.length ?? 0) === 0
-    && LEGACY_UNTITLED_TITLES.has(String(conversation.title || '').toLocaleLowerCase());
-}
 
 interface DataSectionProps {
   conversations: Conversation[];
@@ -60,16 +47,18 @@ export const DataSection: React.FC<DataSectionProps> = ({ conversations, setting
       // or the backup would contain empty conversations.
       const allConversations = await Promise.all(
         listedConversations.map(async (conv) => {
-          const { messages } = await api.getConversationMessages(conv.id, conv.messageCount || 100000, 0);
+          const messages = await api.getAllConversationMessages(conv.id);
           return { ...conv, messages };
         })
       );
       const zip = new JSZip();
 
+      await addBackupAttachments(zip, allConversations);
+
       zip.file('backup.json', JSON.stringify({
         conversations: allConversations,
         settings,
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
       }, null, 2));
 
@@ -122,70 +111,9 @@ export const DataSection: React.FC<DataSectionProps> = ({ conversations, setting
 
       const backupData = JSON.parse(await backupFile.async('string'));
 
-      // Merge conversations additively against the server-backed list.
-      if (backupData.conversations && Array.isArray(backupData.conversations)) {
-        const existingById = new Map<string, Conversation>();
-        for (const conv of conversations) existingById.set(conv.id, conv);
-
-        for (const backupConv of backupData.conversations) {
-          if (!backupConv.id) continue;
-
-          const existing = existingById.get(backupConv.id);
-          const backupIsUntitled = isUntitledBackup(backupConv);
-          const backupTitle = backupIsUntitled ? '' : (backupConv.title || '');
-          if (!existing) {
-            existingById.set(backupConv.id, { ...backupConv, title: backupTitle, isUntitled: backupIsUntitled });
-            try {
-              await api.createConversation({
-                id: backupConv.id,
-                title: backupTitle,
-                isUntitled: backupIsUntitled,
-                messages: backupConv.messages || [],
-              });
-            } catch (err: any) {
-              // Already on the server (409) — update it instead.
-              if (err instanceof ApiError && err.status === 409) {
-                try {
-                  await api.updateConversation(backupConv.id, {
-                    messages: backupConv.messages || [],
-                    title: backupTitle,
-                    isUntitled: backupIsUntitled,
-                  });
-                } catch (updateErr) {
-                  console.error('Failed to sync imported conversation to server (fallback update)', updateErr);
-                }
-              } else {
-                console.error('Failed to sync imported conversation to server', err);
-              }
-            }
-          } else {
-            const existingMsgIds = new Set(existing.messages.map((m: any) => m.id));
-            const newMessages = (backupConv.messages || []).filter((m: any) => m.id && !existingMsgIds.has(m.id));
-            if (newMessages.length > 0) {
-              const mergedConv: Conversation = {
-                ...existing,
-                messages: [...existing.messages, ...newMessages],
-                updatedAt: Date.now(),
-                title: backupIsUntitled ? existing.title : backupTitle,
-                isUntitled: backupIsUntitled ? existing.isUntitled : false,
-              };
-              existingById.set(backupConv.id, mergedConv);
-              try {
-                await api.updateConversation(backupConv.id, {
-                  messages: mergedConv.messages,
-                  title: mergedConv.title,
-                  isUntitled: mergedConv.isUntitled,
-                });
-              } catch (err) {
-                console.error('Failed to sync merged conversation to server', err);
-              }
-            }
-          }
-        }
-      }
-      if (backupData.settings) {
-        localStorage.setItem('chat-assistant-settings', JSON.stringify(backupData.settings));
-      }
+      await restoreBackupAttachments(content, backupData.conversations);
+      await importConversations(backupData.conversations);
+      if (backupData.settings) await api.updateSettings(backupData.settings);
 
       setStatus({ kind: 'success', text: t('chat.data.importSuccess') });
       setTimeout(() => window.location.reload(), 900);

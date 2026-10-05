@@ -1,28 +1,12 @@
 import { Router, Response, Request } from 'express';
 import db from '../db';
+import { cleanupAttachments, resolveAttachments, metadata, messageAttachmentIds } from '../lib/attachments';
+import { serializeConversation, type Message } from '../lib/conversation';
 import { AuthRequest, authMiddleware, verifySseToken } from '../middleware/auth';
 import { generationManager } from '../generation/manager';
 import { eventBus } from '../generation/eventBus';
 
 const router = Router();
-
-function serializeConversation(c: any, messageLimit?: number, preParsedMessages?: any[]) {
-  const allMessages = preParsedMessages || JSON.parse(c.messages);
-  const messages = messageLimit ? allMessages.slice(-messageLimit) : allMessages;
-  return {
-    id: c.id,
-    title: c.title,
-    isUntitled: !!c.is_untitled,
-    messages,
-    messageCount: allMessages.length,
-    createdAt: c.created_at,
-    updatedAt: c.updated_at,
-    pinned: !!c.pinned,
-    parentConversationId: c.parent_conversation_id || undefined,
-    streamingStatus: c.streaming_status || null,
-    streamingMessageId: c.streaming_message_id || null,
-  };
-}
 
 router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   const limit = parseInt(req.query.limit as string) || 0;
@@ -37,19 +21,7 @@ router.get('/', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 
   const conversations = db.prepare(query).all(...params) as any[];
-  res.json(conversations.map(c => ({
-    id: c.id,
-    title: c.title,
-    isUntitled: !!c.is_untitled,
-    messages: [],
-    messageCount: c.message_count,
-    createdAt: c.created_at,
-    updatedAt: c.updated_at,
-    pinned: !!c.pinned,
-    parentConversationId: c.parent_conversation_id || undefined,
-    streamingStatus: c.streaming_status || null,
-    streamingMessageId: c.streaming_message_id || null,
-  })));
+  res.json(conversations.map(c => serializeConversation(c)));
 });
 
 router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
@@ -57,6 +29,8 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
   const convId = id || require('crypto').randomUUID();
   const now = Date.now();
   const storedMessages = Array.isArray(messages) ? messages : [];
+  try { for (const message of storedMessages) if (message.attachments) message.attachments = resolveAttachments(message.attachments.map((file: { id: string }) => file.id), req.userId!).map(metadata); }
+  catch (error) { res.status((error as { statusCode?: number }).statusCode || 400).json({ error: (error as Error).message }); return; }
   const untitled = storedMessages.length === 0 && (isUntitled === true || (!title && isUntitled !== false));
   const storedTitle = untitled ? '' : (title || 'New Conversation');
 
@@ -89,7 +63,9 @@ router.post('/', authMiddleware, (req: AuthRequest, res: Response) => {
 });
 
 router.delete('/', authMiddleware, (req: AuthRequest, res: Response) => {
+  const files = (db.prepare('SELECT messages FROM conversations WHERE user_id = ?').all(req.userId!) as { messages: string }[]).flatMap(row => messageAttachmentIds(row.messages));
   db.prepare('DELETE FROM conversations WHERE user_id = ?').run(req.userId!);
+  cleanupAttachments(req.userId!, 0, files);
   res.json({ success: true });
 });
 
@@ -127,6 +103,8 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
     params.push(isUntitled ? 1 : 0);
   }
   if (messages !== undefined) {
+    try { for (const message of messages) if (message.attachments) message.attachments = resolveAttachments(message.attachments.map((file: { id: string }) => file.id), req.userId!).map(metadata); }
+    catch (error) { res.status((error as { statusCode?: number }).statusCode || 400).json({ error: (error as Error).message }); return; }
     updates.push('messages = ?');
     params.push(JSON.stringify(messages));
   }
@@ -144,8 +122,8 @@ router.put('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
 router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const existing = db.prepare(
-    'SELECT id FROM conversations WHERE id = ? AND user_id = ?'
-  ).get(id, req.userId!);
+    'SELECT id, messages FROM conversations WHERE id = ? AND user_id = ?'
+  ).get(id, req.userId!) as { id: string; messages: string } | undefined;
 
   if (!existing) {
     res.status(404).json({ error: 'Conversation not found' });
@@ -153,14 +131,15 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res: Response) => {
   }
 
   db.prepare('DELETE FROM conversations WHERE id = ?').run(id);
+  cleanupAttachments(req.userId!, 0, messageAttachmentIds(existing.messages));
   res.json({ success: true });
 });
 
 router.post('/:id/messages', authMiddleware, (req: AuthRequest, res: Response) => {
   const { id: conversationId } = req.params;
-  const { content, idempotencyKey, parentMessageId } = req.body;
+  const { content, idempotencyKey, parentMessageId, attachmentIds } = req.body;
 
-  if (!content || typeof content !== 'string' || !content.trim()) {
+  if (typeof content !== 'string' || (!content.trim() && (!Array.isArray(attachmentIds) || !attachmentIds.length))) {
     res.status(400).json({ error: 'Message content is required' });
     return;
   }
@@ -190,7 +169,8 @@ router.post('/:id/messages', authMiddleware, (req: AuthRequest, res: Response) =
       conversationId,
       req.userId!,
       content.trim(),
-      key
+      key,
+      attachmentIds
     );
 
     res.status(alreadyRunning ? 200 : 201).json({
@@ -290,7 +270,8 @@ router.post('/:id/retry', authMiddleware, (req: AuthRequest, res: Response) => {
       conversationId,
       req.userId!,
       targetUserMessage.content,
-      key
+      key,
+      targetUserMessage.attachments?.map((file: { id: string }) => file.id)
     );
     res.json({ assistantMessageId });
   } catch (err: any) {
@@ -342,9 +323,11 @@ router.post('/:id/edit', authMiddleware, (req: AuthRequest, res: Response) => {
   // editing an assistant message, from the user message that precedes it.
   let history: any[];
   let regenContent: string;
+  let regenAttachments: string[] | undefined;
   if (targetMessage.role === 'user') {
     history = messages.slice(0, messageIndex);
     regenContent = content.trim();
+    regenAttachments = targetMessage.attachments?.map((file: { id: string }) => file.id);
   } else {
     let lastUserIdx = -1;
     for (let i = messageIndex - 1; i >= 0; i--) {
@@ -359,6 +342,7 @@ router.post('/:id/edit', authMiddleware, (req: AuthRequest, res: Response) => {
     }
     history = messages.slice(0, lastUserIdx);
     regenContent = messages[lastUserIdx].content;
+    regenAttachments = messages[lastUserIdx].attachments?.map((file: { id: string }) => file.id);
   }
 
   // Title is owned by manager.start (derives it from the first user message,
@@ -373,7 +357,8 @@ router.post('/:id/edit', authMiddleware, (req: AuthRequest, res: Response) => {
       conversationId,
       req.userId!,
       regenContent,
-      key
+      key,
+      regenAttachments
     );
     res.json({ assistantMessageId });
   } catch (err: any) {
@@ -440,7 +425,8 @@ router.post('/:id/branch', authMiddleware, (req: AuthRequest, res: Response) => 
         newConvId,
         req.userId!,
         content !== undefined ? content.trim() : targetMessage.content,
-        key
+        key,
+        targetMessage.attachments?.map((file: { id: string }) => file.id)
       );
       // start() overwrites the DB row — re-read the canonical messages so the
       // client receives the exact post-start state (history + user turn +
@@ -494,7 +480,7 @@ router.get('/:id/messages', authMiddleware, (req: AuthRequest, res: Response) =>
     return;
   }
 
-  const allMessages: any[] = JSON.parse(conv.messages);
+  const allMessages: Message[] = JSON.parse(conv.messages);
   const page = allMessages.slice(offset, offset + limit);
   res.json({ messages: page, total: allMessages.length });
 });
@@ -529,7 +515,7 @@ router.get('/:id/events', (req: Request, res: Response) => {
 
   res.write(': connected\n\n');
 
-  const allMessages: any[] = JSON.parse(conv.messages);
+  const allMessages: Message[] = JSON.parse(conv.messages);
   const snapshotMessageCount = allMessages.length;
 
   const snapshotData = {

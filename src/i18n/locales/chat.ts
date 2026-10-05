@@ -3,6 +3,30 @@
 export const chat = {
   en: {
     chat: {
+      attachments: {
+        "attach": "Attach files",
+        "hint": "Attach or drop documents, text, or images · up to 5 files, 10 MB total",
+        "limit": "Choose up to 5 files totaling 10 MB or less.",
+        "uploading": "Uploading and reading file",
+        "failed": "Upload failed. Remove the file and try again.",
+        "remove": "Remove {name}",
+        "download": "Download {name}",
+        "downloadError": "Could not download the file.",
+        "errors": {
+          "unsupported": "This file type is not supported. Attach a document, text file, or PNG, JPEG, GIF, or WebP image. Audio and video are not supported.",
+          "encoding": "Save this text file as UTF-8 and try again.",
+          "mismatch": "The file contents do not match its extension.",
+          "size": "Choose a nonempty file up to 10 MB.",
+          "textLimit": "This document exceeds 200,000 characters. Split it into smaller files.",
+          "timeout": "Reading the document took too long. Try a smaller file.",
+          "damaged": "Could not read this document. Check that it is valid and has no password.",
+          "unreadable": "No readable text was found in this document.",
+          "scanLimit": "Scanned PDFs are limited to 20 pages. Split the file and try again.",
+          "complex": "This document is too complex. Export a simpler copy and try again.",
+          "storage": "File storage is full. Delete chats you no longer need and try later.",
+          "busy": "File processing is busy. Remove this file and try again shortly."
+        }
+      },
       thread: {
         starterPromptsLabel: 'Starter prompts',
         promptWorkSession: 'Help me plan a focused work session',
@@ -15,6 +39,8 @@ export const chat = {
         thinking: 'Thinking',
         scrollToLatest: 'Scroll to latest message',
         messageInput: 'Message input',
+        expandComposer: 'Expand message editor',
+        collapseComposer: 'Collapse message editor',
         addToConversation: 'Add to the conversation after this response…',
         messagePlaceholder: 'Message LF-Chat…',
         activeBackend: 'Active backend',
@@ -166,7 +192,31 @@ export const chat = {
   },
   de: {
     chat: {
-      thread: { starterPromptsLabel: 'Vorschläge', promptWorkSession: 'Hilf mir, eine konzentrierte Arbeitssitzung zu planen', promptExplainTopic: 'Erkläre ein komplexes Thema verständlich', promptProjectUpdate: 'Verfasse ein kurzes Projekt-Update', heading: 'Woran arbeiten wir?', intro: 'Starte ein fokussiertes Gespräch. LF-Chat hält den Thread privat und lässt dich jederzeit verzweigen, überarbeiten oder erneut versuchen.', loadingEarlier: 'Frühere Nachrichten werden geladen', loadEarlier: 'Frühere Nachrichten laden', thinking: 'Denke nach', scrollToLatest: 'Zur neuesten Nachricht scrollen', messageInput: 'Nachrichteneingabe', addToConversation: 'Nach dieser Antwort etwas hinzufügen…', messagePlaceholder: 'Nachricht an LF-Chat…', activeBackend: 'Aktives Backend', sentTo: 'Nachrichten werden an {url} gesendet', chooseBackend: 'Konfiguriertes Backend auswählen', noBackend: 'Kein Backend konfiguriert', addBackend: 'Backend hinzufügen', unnamedBackend: 'Unbenanntes Backend', usedForNext: 'Für die nächste Antwort verwendet', configureBackend: 'Backend zum Senden konfigurieren', sendMessage: 'Nachricht senden', stopResponse: 'Antwort stoppen', ctrlEnterToSend: 'Strg ↵ zum Senden', enterToSend: 'Enter zum Senden · Umschalt ↵ für neue Zeile', verifyDetails: 'Wichtige Angaben prüfen.', sendError: 'Nachricht konnte nicht gesendet werden' },
+      attachments: {
+        "attach": "Dateien anhängen",
+        "hint": "Dokumente, Text oder Bilder anhängen oder hier ablegen · bis zu 5 Dateien, insgesamt 10 MB",
+        "limit": "Wähle bis zu 5 Dateien mit insgesamt höchstens 10 MB.",
+        "uploading": "Datei wird hochgeladen und gelesen",
+        "failed": "Hochladen fehlgeschlagen. Entferne die Datei und versuche es erneut.",
+        "remove": "{name} entfernen",
+        "download": "{name} herunterladen",
+        "downloadError": "Die Datei konnte nicht heruntergeladen werden.",
+        "errors": {
+          "unsupported": "Dieses Dateiformat wird nicht unterstützt. Verwende ein Dokument, eine Textdatei oder ein PNG-, JPEG-, GIF- oder WebP-Bild. Audio und Video werden nicht unterstützt.",
+          "encoding": "Speichere diese Textdatei als UTF-8 und versuche es erneut.",
+          "mismatch": "Der Dateiinhalt passt nicht zur Dateiendung.",
+          "size": "Wähle eine nicht leere Datei mit höchstens 10 MB.",
+          "textLimit": "Dieses Dokument enthält mehr als 200.000 Zeichen. Teile es in kleinere Dateien auf.",
+          "timeout": "Das Lesen dauerte zu lange. Versuche eine kleinere Datei.",
+          "damaged": "Das Dokument konnte nicht gelesen werden. Prüfe, ob es gültig und ohne Passwort ist.",
+          "unreadable": "Im Dokument wurde kein lesbarer Text gefunden.",
+          "scanLimit": "Gescannte PDFs dürfen höchstens 20 Seiten haben. Teile die Datei auf.",
+          "complex": "Das Dokument ist zu komplex. Exportiere eine einfachere Kopie.",
+          "storage": "Der Dateispeicher ist voll. Lösche nicht mehr benötigte Chats und versuche es später.",
+          "busy": "Die Dateiverarbeitung ist ausgelastet. Entferne die Datei und versuche es gleich erneut."
+        }
+      },
+      thread: { starterPromptsLabel: 'Vorschläge', promptWorkSession: 'Hilf mir, eine konzentrierte Arbeitssitzung zu planen', promptExplainTopic: 'Erkläre ein komplexes Thema verständlich', promptProjectUpdate: 'Verfasse ein kurzes Projekt-Update', heading: 'Woran arbeiten wir?', intro: 'Starte ein fokussiertes Gespräch. LF-Chat hält den Thread privat und lässt dich jederzeit verzweigen, überarbeiten oder erneut versuchen.', loadingEarlier: 'Frühere Nachrichten werden geladen', loadEarlier: 'Frühere Nachrichten laden', thinking: 'Denke nach', scrollToLatest: 'Zur neuesten Nachricht scrollen', messageInput: 'Nachrichteneingabe', expandComposer: 'Nachrichteneingabe vergrößern', collapseComposer: 'Nachrichteneingabe verkleinern', addToConversation: 'Nach dieser Antwort etwas hinzufügen…', messagePlaceholder: 'Nachricht an LF-Chat…', activeBackend: 'Aktives Backend', sentTo: 'Nachrichten werden an {url} gesendet', chooseBackend: 'Konfiguriertes Backend auswählen', noBackend: 'Kein Backend konfiguriert', addBackend: 'Backend hinzufügen', unnamedBackend: 'Unbenanntes Backend', usedForNext: 'Für die nächste Antwort verwendet', configureBackend: 'Backend zum Senden konfigurieren', sendMessage: 'Nachricht senden', stopResponse: 'Antwort stoppen', ctrlEnterToSend: 'Strg ↵ zum Senden', enterToSend: 'Enter zum Senden · Umschalt ↵ für neue Zeile', verifyDetails: 'Wichtige Angaben prüfen.', sendError: 'Nachricht konnte nicht gesendet werden' },
       sidePanel: { newChat: 'Neuer Chat', searchPlaceholder: 'Threads durchsuchen…', searchThreads: 'Threads durchsuchen', clearSearch: 'Thread-Suche leeren', today: 'Heute', yesterday: 'Gestern', last7Days: 'Letzte 7 Tage', last30Days: 'Letzte 30 Tage', older: 'Älter', renameConversation: 'Unterhaltung umbenennen', saveConversationName: 'Unterhaltungsnamen speichern', cancelRenaming: 'Umbenennen abbrechen', openConversation: 'Unterhaltung öffnen: {title}', unpin: 'Lösen', pin: 'Anheften', unpinTitle: '{title} lösen', pinTitle: '{title} anheften', conversationOptions: 'Optionen für {title}', moreOptions: 'Weitere Optionen', loadMore: 'Mehr laden', loading: 'Wird geladen…', noConversations: 'Noch keine Unterhaltungen', startNewChat: 'Starte einen neuen Chat', noMatchingThreads: 'Keine passenden Threads', tryDifferentSearch: 'Versuche einen anderen Titel oder leere die Suche.', accountMenuFor: 'Kontomenü für {name}', yourAccount: 'dein Konto', account: 'Konto', accountMenu: 'Kontomenü', profile: 'Profil', settings: 'Einstellungen', dataManagement: 'Datenverwaltung', switchToMode: 'In den {mode}-Modus wechseln', light: 'hellen', dark: 'dunklen', keyboardShortcuts: 'Tastaturkürzel', signOut: 'Abmelden', actionsFor: 'Aktionen für {title}', conversation: 'Unterhaltung', rename: 'Umbenennen', exportText: 'Als Text exportieren', exportMarkdown: 'Als Markdown exportieren', exportJson: 'Als JSON exportieren', delete: 'Löschen', deleteChat: 'Chat löschen?', deleteDescription: 'Diese Aktion kann nicht rückgängig gemacht werden. Alle Nachrichten dieser Unterhaltung werden dauerhaft entfernt.', cancel: 'Abbrechen', confirmDelete: 'Löschen' },
       message: { copied: 'Kopiert', copyMessage: 'Nachricht kopieren', editMessage: 'Nachricht bearbeiten', retryResponse: 'Antwort erneut versuchen', branchFromHere: 'Hier verzweigen', branchConversation: 'Unterhaltung ab dieser Nachricht verzweigen', yourMessage: 'Deine Nachricht', errorMessage: 'Fehlermeldung', assistantMessage: 'Assistentennachricht', revisePlaceholder: 'Nachricht überarbeiten…', replaceWarning: 'Diesen Teil des Threads ersetzen? {count} spätere {messageWord} werden aus dieser Unterhaltung entfernt. Das Original kann hier nicht wiederhergestellt werden.', message: 'Nachricht', messages: 'Nachrichten', cancel: 'Abbrechen', replaceThread: 'Thread ersetzen', branchWithEdit: 'Mit Bearbeitung verzweigen', saveEdit: 'Bearbeitung speichern', responseError: 'Die Antwort konnte nicht abgeschlossen werden. Prüfe die Details unten und versuche es erneut.', connectionClosed: 'Die Verbindung wurde geschlossen, bevor die Antwort eintraf', proxyHelp: 'Prüfe die Timeout-Einstellungen deines Reverse-Proxys, Tunnels und Webhook-Dienstes. Bei Nginx sind die folgenden Werte ein guter Ausgangspunkt.', copyNginx: 'Nginx-Beispiel kopieren', responseStopped: 'Antwort gestoppt', interrupted: 'Generierung unterbrochen (Server wurde neu gestartet)', retry: 'Erneut versuchen' },
       code: { copy: 'Kopieren', copied: 'Kopiert', toggleWrap: 'Zeilenumbruch umschalten', wrap: 'Umbruch' },
@@ -177,7 +227,31 @@ export const chat = {
   },
   it: {
     chat: {
-      thread: { starterPromptsLabel: 'Suggerimenti', promptWorkSession: 'Aiutami a pianificare una sessione di lavoro concentrata', promptExplainTopic: 'Spiega chiaramente un argomento complesso', promptProjectUpdate: 'Scrivi un breve aggiornamento sul progetto', heading: 'Su cosa lavoriamo?', intro: 'Inizia una conversazione mirata. LF-Chat mantiene il thread privato e ti permette di creare rami, modificare o riprovare mentre procedi.', loadingEarlier: 'Caricamento dei messaggi precedenti', loadEarlier: 'Carica i messaggi precedenti', thinking: 'Sto pensando', scrollToLatest: 'Scorri all’ultimo messaggio', messageInput: 'Campo messaggio', addToConversation: 'Aggiungi alla conversazione dopo questa risposta…', messagePlaceholder: 'Scrivi a LF-Chat…', activeBackend: 'Backend attivo', sentTo: 'I messaggi saranno inviati a {url}', chooseBackend: 'Scegli un backend configurato', noBackend: 'Nessun backend configurato', addBackend: 'Aggiungi un backend', unnamedBackend: 'Backend senza nome', usedForNext: 'Utilizzato per la prossima risposta', configureBackend: 'Configura un backend per inviare', sendMessage: 'Invia messaggio', stopResponse: 'Interrompi risposta', ctrlEnterToSend: 'Ctrl ↵ per inviare', enterToSend: 'Invio per inviare · Maiusc ↵ per una nuova riga', verifyDetails: 'Verifica i dettagli importanti.', sendError: 'Impossibile inviare il messaggio' },
+      attachments: {
+        "attach": "Allega file",
+        "hint": "Allega o trascina documenti, testo o immagini · fino a 5 file, 10 MB totali",
+        "limit": "Scegli fino a 5 file per un totale massimo di 10 MB.",
+        "uploading": "Caricamento e lettura del file",
+        "failed": "Caricamento fallito. Rimuovi il file e riprova.",
+        "remove": "Rimuovi {name}",
+        "download": "Scarica {name}",
+        "downloadError": "Impossibile scaricare il file.",
+        "errors": {
+          "unsupported": "Formato non supportato. Allega un documento, un file di testo o un’immagine PNG, JPEG, GIF o WebP. Audio e video non sono supportati.",
+          "encoding": "Salva il file di testo in UTF-8 e riprova.",
+          "mismatch": "Il contenuto non corrisponde all’estensione del file.",
+          "size": "Scegli un file non vuoto di massimo 10 MB.",
+          "textLimit": "Il documento supera 200.000 caratteri. Dividilo in file più piccoli.",
+          "timeout": "La lettura ha impiegato troppo tempo. Prova un file più piccolo.",
+          "damaged": "Impossibile leggere il documento. Verifica che sia valido e senza password.",
+          "unreadable": "Il documento non contiene testo leggibile.",
+          "scanLimit": "I PDF scansionati possono avere al massimo 20 pagine. Dividi il file.",
+          "complex": "Il documento è troppo complesso. Esporta una copia più semplice.",
+          "storage": "Lo spazio per i file è esaurito. Elimina chat non necessarie e riprova più tardi.",
+          "busy": "Il servizio è occupato. Rimuovi il file e riprova tra poco."
+        }
+      },
+      thread: { starterPromptsLabel: 'Suggerimenti', promptWorkSession: 'Aiutami a pianificare una sessione di lavoro concentrata', promptExplainTopic: 'Spiega chiaramente un argomento complesso', promptProjectUpdate: 'Scrivi un breve aggiornamento sul progetto', heading: 'Su cosa lavoriamo?', intro: 'Inizia una conversazione mirata. LF-Chat mantiene il thread privato e ti permette di creare rami, modificare o riprovare mentre procedi.', loadingEarlier: 'Caricamento dei messaggi precedenti', loadEarlier: 'Carica i messaggi precedenti', thinking: 'Sto pensando', scrollToLatest: 'Scorri all’ultimo messaggio', messageInput: 'Campo messaggio', expandComposer: 'Espandi il campo messaggio', collapseComposer: 'Riduci il campo messaggio', addToConversation: 'Aggiungi alla conversazione dopo questa risposta…', messagePlaceholder: 'Scrivi a LF-Chat…', activeBackend: 'Backend attivo', sentTo: 'I messaggi saranno inviati a {url}', chooseBackend: 'Scegli un backend configurato', noBackend: 'Nessun backend configurato', addBackend: 'Aggiungi un backend', unnamedBackend: 'Backend senza nome', usedForNext: 'Utilizzato per la prossima risposta', configureBackend: 'Configura un backend per inviare', sendMessage: 'Invia messaggio', stopResponse: 'Interrompi risposta', ctrlEnterToSend: 'Ctrl ↵ per inviare', enterToSend: 'Invio per inviare · Maiusc ↵ per una nuova riga', verifyDetails: 'Verifica i dettagli importanti.', sendError: 'Impossibile inviare il messaggio' },
       sidePanel: { newChat: 'Nuova chat', searchPlaceholder: 'Cerca nei thread…', searchThreads: 'Cerca thread', clearSearch: 'Cancella ricerca thread', today: 'Oggi', yesterday: 'Ieri', last7Days: 'Ultimi 7 giorni', last30Days: 'Ultimi 30 giorni', older: 'Meno recenti', renameConversation: 'Rinomina conversazione', saveConversationName: 'Salva nome conversazione', cancelRenaming: 'Annulla rinomina', openConversation: 'Apri conversazione: {title}', unpin: 'Rimuovi fissaggio', pin: 'Fissa', unpinTitle: 'Rimuovi {title} dal fissaggio', pinTitle: 'Fissa {title}', conversationOptions: 'Opzioni per {title}', moreOptions: 'Altre opzioni', loadMore: 'Carica altro', loading: 'Caricamento…', noConversations: 'Nessuna conversazione', startNewChat: 'Inizia una nuova chat', noMatchingThreads: 'Nessun thread corrispondente', tryDifferentSearch: 'Prova un altro titolo o cancella la ricerca.', accountMenuFor: 'Menu account per {name}', yourAccount: 'il tuo account', account: 'Account', accountMenu: 'Menu account', profile: 'Profilo', settings: 'Impostazioni', dataManagement: 'Gestione dati', switchToMode: 'Passa alla modalità {mode}', light: 'chiara', dark: 'scura', keyboardShortcuts: 'Scorciatoie da tastiera', signOut: 'Esci', actionsFor: 'Azioni per {title}', conversation: 'conversazione', rename: 'Rinomina', exportText: 'Esporta come testo', exportMarkdown: 'Esporta come Markdown', exportJson: 'Esporta come JSON', delete: 'Elimina', deleteChat: 'Eliminare la chat?', deleteDescription: 'Questa azione non può essere annullata. Tutti i messaggi di questa conversazione saranno rimossi definitivamente.', cancel: 'Annulla', confirmDelete: 'Elimina' },
       message: { copied: 'Copiato', copyMessage: 'Copia messaggio', editMessage: 'Modifica messaggio', retryResponse: 'Riprova risposta', branchFromHere: 'Crea un ramo da qui', branchConversation: 'Crea un ramo della conversazione da questo messaggio', yourMessage: 'Il tuo messaggio', errorMessage: 'Messaggio di errore', assistantMessage: 'Messaggio dell’assistente', revisePlaceholder: 'Modifica il tuo messaggio…', replaceWarning: 'Sostituire questa parte del thread? {count} {messageWord} successivi verranno rimossi da questa conversazione. L’originale non è recuperabile qui.', message: 'messaggio', messages: 'messaggi', cancel: 'Annulla', replaceThread: 'Sostituisci thread', branchWithEdit: 'Crea ramo con modifica', saveEdit: 'Salva modifica', responseError: 'Impossibile completare la risposta. Controlla i dettagli qui sotto e riprova.', connectionClosed: 'La connessione si è chiusa prima dell’arrivo della risposta', proxyHelp: 'Controlla le impostazioni di timeout del proxy inverso, del tunnel e del servizio webhook. Se usi Nginx, i valori sotto sono un buon punto di partenza.', copyNginx: 'Copia esempio Nginx', responseStopped: 'Risposta interrotta', interrupted: 'Generazione interrotta (server riavviato)', retry: 'Riprova' },
       code: { copy: 'Copia', copied: 'Copiato', toggleWrap: 'Attiva/disattiva ritorno a capo', wrap: 'A capo' },

@@ -54,8 +54,8 @@ The frontend lives in `src/`. The backend lives in `server/src/`. The backend se
 Install dependencies for both workspaces:
 
 ```bash
-npm install
-cd server && npm install && cd ..
+npm ci
+cd server && npm ci && cd ..
 ```
 
 Create an environment file:
@@ -83,6 +83,8 @@ Useful checks:
 
 ```bash
 npm run lint
+npm run lint:server
+npm test
 npm run build
 npm run build:server
 ```
@@ -163,9 +165,11 @@ server/src/generation/Generation manager, webhook runner, SSE event bus, snapsho
 server/src/db.ts      SQLite schema and lightweight migrations
 docker-compose.yml    Persistent production deployment
 Dockerfile            Multi-stage frontend/backend image build
-ROADMAP.md            Planned reasoning and media capabilities
+docs/refactor-audit.md Shared-core refactor, validation and porting boundaries
 ```
 
 ## Deployment scope
 
 This repository was originally designed as an internal company tool. Review authentication, reverse-proxy, SMTP, backup, retention, and webhook security settings before using it with sensitive data or exposing it to the public internet.
+
+[File attachments and n8n setup](docs/attachments.md) covers supported formats, storage, backups, limits, and the multipart workflow contract.

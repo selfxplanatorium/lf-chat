@@ -9,3 +9,8 @@ data/
 .env
 .env.local
 .env.production
+.n8n_env
+
+.wp_env
+
+.baserow_jwt

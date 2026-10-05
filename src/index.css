@@ -549,3 +549,56 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* The nonmodal dialog occupies the normal composer slot; showModal promotes
+   that same element above the app without remounting its textarea. */
+.assistant-composer-editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+  text-align: left;
+}
+
+.assistant-composer-editor-modal .assistant-composer {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-bg-surface);
+}
+
+.assistant-composer-editor-modal .assistant-composer-input {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  height: 100% !important;
+  overflow-y: auto;
+}
+
+.assistant-composer-editor::backdrop {
+  background: rgb(0 0 0 / 0);
+  -webkit-backdrop-filter: blur(0);
+  backdrop-filter: blur(0);
+  transition: background 200ms ease-out, backdrop-filter 200ms ease-out;
+}
+
+.assistant-composer-editor-expanded::backdrop {
+  background: rgb(0 0 0 / 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-composer-editor::backdrop {
+    transition: none;
+  }
+}
